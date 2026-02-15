@@ -33,4 +33,129 @@
 
 <script>
   // -------- Supabase Setup --------
-  const SUPABASE_URL = 'https://nfhbaojmrrocvdrgftqu.supabase.co_
+  const SUPABASE_URL = 'https://nfhbaojmrrocvdrgftqu.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_ZWRhwo5ikuNYIH9EksEypQ_nXE6jrwj';
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // -------- Leaflet Map --------
+  const map = L.map('map').setView([40.5, -77.5], 7);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  // -------- Markers --------
+  let markers = {};
+
+  function addMarker(c) {
+    const icon = L.divIcon({className:'bunny-pin', html:'🐰', iconSize:[24,24]});
+    const marker = L.marker([c.latitude, c.longitude], {icon:icon}).addTo(map);
+    const popupContent = `
+      <div>
+        <strong>Languages:</strong> ${c.languages || ''}<br>
+        <strong>Experience:</strong> ${c.experience || ''}<br>
+        <strong>Drives:</strong> ${c.drives?'Yes':'No'}<br>
+        <strong>TB Test:</strong> ${c.tb_test?'Yes':'No'}<br>
+        <strong>Gender:</strong> ${c.gender || ''}<br>
+        <strong>Notes:</strong> ${c.notes || ''}
+      </div>
+    `;
+    marker.bindPopup(popupContent);
+    markers[c.id] = marker;
+  }
+
+  async function loadCaregivers() {
+    const { data } = await supabase.from('caregivers').select('*');
+    data.forEach(c => addMarker(c));
+  }
+  loadCaregivers();
+
+  supabase.from('caregivers').on('*', payload => {
+    if(payload.eventType==='INSERT' || payload.eventType==='UPDATE'){
+      if(markers[payload.new.id]){
+        markers[payload.new.id].setLatLng([payload.new.latitude,payload.new.longitude]);
+      } else addMarker(payload.new);
+    }
+    if(payload.eventType==='DELETE'){
+      if(markers[payload.old.id]){
+        map.removeLayer(markers[payload.old.id]);
+        delete markers[payload.old.id];
+      }
+    }
+  }).subscribe();
+
+  // -------- Click to add caregiver --------
+  map.on('click', async e => {
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+    const languages = prompt("Languages (comma separated):");
+    const experience = prompt("Experience:");
+    const drives = confirm("Drives? OK=Yes, Cancel=No");
+    const tb_test = confirm("TB Test done? OK=Yes, Cancel=No");
+    const gender = prompt("Gender (Male/Female/Other):");
+    const notes = prompt("Notes:");
+
+    await supabase.from('caregivers').insert([{
+      postal_code:'',
+      latitude: lat,
+      longitude: lng,
+      languages,
+      experience,
+      drives,
+      tb_test,
+      gender,
+      notes
+    }]);
+  });
+
+  // -------- Postal code search --------
+  document.getElementById('postalSearch').addEventListener('keypress', async e=>{
+    if(e.key==='Enter'){
+      const postal = e.target.value.trim();
+      if(!postal) return;
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&country=US&postalcode=${postal}`);
+      const geoData = await geoRes.json();
+      if(!geoData.length){ alert('Invalid postal code'); return; }
+      const lat = geoData[0].lat;
+      const lng = geoData[0].lon;
+      map.setView([lat, lng], 13);
+
+      const languages = prompt("Languages (comma separated):");
+      const experience = prompt("Experience:");
+      const drives = confirm("Drives? OK=Yes, Cancel=No");
+      const tb_test = confirm("TB Test done? OK=Yes, Cancel=No");
+      const gender = prompt("Gender (Male/Female/Other):");
+      const notes = prompt("Notes:");
+
+      await supabase.from('caregivers').insert([{
+        postal_code: postal,
+        latitude: lat,
+        longitude: lng,
+        languages,
+        experience,
+        drives,
+        tb_test,
+        gender,
+        notes
+      }]);
+
+      e.target.value='';
+    }
+  });
+
+  // -------- Preload office pins --------
+  const offices = [
+    {name:"Greater Philadelphia – Main Office", lat:40.142469, lng:-74.962295},
+    {name:"Allentown – Regional Office", lat:40.6026, lng:-75.4711},
+    {name:"Lancaster – Regional Office", lat:40.0379, lng:-76.3055}
+  ];
+
+  offices.forEach(o=>{
+    const icon = L.divIcon({className:'bunny-pin', html:'🏢', iconSize:[24,24]});
+    L.marker([o.lat, o.lng], {icon:icon}).addTo(map)
+      .bindPopup(`<strong>${o.name}</strong>`);
+  });
+
+</script>
+</body>
+</html>
