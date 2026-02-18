@@ -5,25 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bunny CareMap</title>
 
+<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<!-- Tailwind CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet"/>
 
 <style>
   html, body { margin:0; height:100%; }
   #map { height:100%; }
+  .search-bar {
+    position:absolute;
+    top:10px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:1000;
+    width:300px;
+  }
+  .search-bar input {
+    width:100%;
+    padding:8px;
+    border-radius:6px;
+    border:1px solid #ccc;
+  }
 </style>
 </head>
 <body>
 
+<div class="search-bar">
+  <input type="text" id="postalSearch" placeholder="Enter postal code & press Enter">
+</div>
+
 <div id="map"></div>
 
+<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Supabase JS (v2 CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.js"></script>
 
 <script>
-
-// ======================
-// MAP ALWAYS LOADS FIRST
-// ======================
+// =======================
+// 🔹 INIT MAP (ALWAYS WORKS)
+// =======================
 const map = L.map('map').setView([40.5, -77.5], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -32,49 +56,122 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 console.log("Map loaded successfully");
 
-// ======================
-// SUPABASE SAFE INIT
-// ======================
+// =======================
+// 🔹 SUPABASE SAFE INIT
+// =======================
 let db;
-
 try {
   db = supabase.createClient(
     'https://nfhbaojmrrocvdrgftqu.supabase.co',
     'sb_publishable_ZWRhwo5ikuNYIH9EksEypQ_nXE6jrwj'
   );
   console.log("Supabase initialized");
-} catch (err) {
-  console.error("Supabase failed to initialize:", err);
+} catch(err) {
+  console.error("Supabase init failed:", err);
 }
 
-// ======================
-// LOAD CAREGIVERS SAFELY
-// ======================
+// =======================
+// 🔹 MARKERS STORAGE
+// =======================
+let markers = {};
+
+function createPopup(c) {
+  return `
+    <div>
+      <strong>Languages:</strong> ${c.languages || ''}<br>
+      <strong>Experience:</strong> ${c.experience || ''}<br>
+      <strong>Drives:</strong> ${c.drives ? 'Yes':'No'}<br>
+      <strong>TB Test:</strong> ${c.tb_test ? 'Yes':'No'}<br>
+      <strong>Gender:</strong> ${c.gender || ''}<br>
+      <strong>Notes:</strong> ${c.notes || ''}
+    </div>
+  `;
+}
+
+function addMarker(c) {
+  if (!c.latitude || !c.longitude) return;
+  const icon = L.divIcon({ html:'🐰', iconSize:[24,24], className:'' });
+  const marker = L.marker([c.latitude, c.longitude], { icon }).addTo(map);
+  marker.bindPopup(createPopup(c));
+  markers[c.id] = marker;
+}
+
+function updateMarker(c) {
+  if (markers[c.id]) {
+    markers[c.id].setLatLng([c.latitude, c.longitude]);
+    markers[c.id].setPopupContent(createPopup(c));
+  }
+}
+
+function removeMarker(id) {
+  if (markers[id]) {
+    map.removeLayer(markers[id]);
+    delete markers[id];
+  }
+}
+
+// =======================
+// 🔹 LOAD EXISTING CAREGIVERS
+// =======================
 async function loadCaregivers() {
-
-  if (!db) {
-    console.log("Supabase not available");
-    return;
+  if (!db) return;
+  try {
+    const { data, error } = await db.from('caregivers').select('*');
+    if (error) {
+      console.error("Supabase select error:", error);
+      return;
+    }
+    data.forEach(addMarker);
+  } catch(err) {
+    console.error("Error loading caregivers:", err);
   }
-
-  const { data, error } = await db.from('caregivers').select('*');
-
-  if (error) {
-    console.error("Supabase error:", error);
-    return;
-  }
-
-  data.forEach(c => {
-    if (!c.latitude || !c.longitude) return;
-
-    L.marker([c.latitude, c.longitude])
-      .addTo(map)
-      .bindPopup("Caregiver");
-  });
 }
 
 loadCaregivers();
 
-</script>
-</body>
-</html>
+// =======================
+// 🔹 CLICK TO ADD CAREGIVER
+// =======================
+map.on('click', async e => {
+  if (!db) {
+    alert("Supabase not available.");
+    return;
+  }
+
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+
+  const languages = prompt("Languages:");
+  const experience = prompt("Experience:");
+  const drives = confirm("Drives?");
+  const tb_test = confirm("TB Test done?");
+  const gender = prompt("Gender:");
+  const notes = prompt("Notes:");
+
+  try {
+    const { error } = await db.from('caregivers').insert([{
+      postal_code:'',
+      latitude: lat,
+      longitude: lng,
+      languages,
+      experience,
+      drives,
+      tb_test,
+      gender,
+      notes
+    }]);
+    if (error) console.error("Insert failed:", error);
+    else console.log("Caregiver added!");
+  } catch(err) {
+    console.error("Insert error:", err);
+  }
+});
+
+// =======================
+// 🔹 POSTAL SEARCH (SAFE)
+// =======================
+document.getElementById('postalSearch').addEventListener('keypress', async e => {
+  if(e.key !== 'Enter') return;
+
+  const postal = e.target.value.trim();
+  if(!postal)
