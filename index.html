@@ -1,101 +1,26 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bunny CareMap</title>
-
-<!-- Leaflet CSS -->
+<meta charset="utf-8" />
+<title>Test Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-<!-- Tailwind -->
-<link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet">
-
-<!-- Supabase v2 -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
-  body, html { margin:0; height:100%; font-family:'Inter',sans-serif; }
-  #map { width:100%; height:100%; }
-  .search-bar { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:1000; width:300px; }
-  .search-bar input { width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; }
+  html, body { height:100%; margin:0; }
+  #map { height:100%; }
 </style>
 </head>
 <body>
 
-<div class="search-bar">
-  <input type="text" id="postalSearch" placeholder="Enter postal code & press Enter">
-</div>
-
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-  // ==============================
-  // 🔹 SUPABASE SETUP (v2 FIXED)
-  // ==============================
-  const SUPABASE_URL = 'https://nfhbaojmrrocvdrgftqu.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_ZWRhwo5ikuNYIH9EksEypQ_nXE6jrwj';
-
-  const { createClient } = supabase;
-  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-  // ==============================
-  // 🔹 MAP INITIALIZATION
-  // ==============================
   const map = L.map('map').setView([40.5, -77.5], 7);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'&copy; OpenStreetMap contributors'
+    attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
+</script>
 
-  // ==============================
-  // 🔹 MARKER STORAGE
-  // ==============================
-  let markers = {};
-
-  function createPopup(c) {
-    return `
-      <div>
-        <strong>Languages:</strong> ${c.languages || ''}<br>
-        <strong>Experience:</strong> ${c.experience || ''}<br>
-        <strong>Drives:</strong> ${c.drives?'Yes':'No'}<br>
-        <strong>TB Test:</strong> ${c.tb_test?'Yes':'No'}<br>
-        <strong>Gender:</strong> ${c.gender || ''}<br>
-        <strong>Notes:</strong> ${c.notes || ''}
-      </div>
-    `;
-  }
-
-  function addMarker(c) {
-    if (!c.latitude || !c.longitude) return;
-
-    const icon = L.divIcon({
-      html:'🐰',
-      className:'',
-      iconSize:[24,24]
-    });
-
-    const marker = L.marker([c.latitude, c.longitude], {icon}).addTo(map);
-    marker.bindPopup(createPopup(c));
-    markers[c.id] = marker;
-  }
-
-  function updateMarker(c) {
-    if (markers[c.id]) {
-      markers[c.id].setLatLng([c.latitude, c.longitude]);
-      markers[c.id].setPopupContent(createPopup(c));
-    }
-  }
-
-  function removeMarker(id) {
-    if (markers[id]) {
-      map.removeLayer(markers[id]);
-      delete markers[id];
-    }
-  }
-
-  // ==============================
-  // 🔹
+</body>
+</html>
